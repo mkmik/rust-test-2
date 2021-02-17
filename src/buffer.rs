@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
-use std::io::{Result, SeekFrom, Cursor};
+use std::io::{Cursor, Result, SeekFrom};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tempfile::tempfile;

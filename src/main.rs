@@ -1,6 +1,8 @@
 #![allow(unused_imports)]
 use bytes::Bytes;
 use futures::{future, Stream, StreamExt};
+use ru2::buffer::buffered_tempfile_stream;
+use std::io::Result;
 use std::io::SeekFrom;
 use std::time::Duration;
 use tempfile::tempfile;
@@ -9,10 +11,8 @@ use tokio::io::AsyncSeekExt;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_util::io::{ReaderStream, StreamReader};
 
-use ru2::buffer::BufferedStream;
-
 #[allow(dead_code)]
-fn get_stream(start: i64, end: i64) -> impl Stream<Item = std::io::Result<Bytes>> {
+fn get_stream(start: i64, end: i64) -> impl Stream<Item = Result<Bytes>> {
     IntervalStream::new(tokio::time::interval(Duration::from_millis(5))).scan(
         start,
         move |acc, _| {
@@ -25,27 +25,25 @@ fn get_stream(start: i64, end: i64) -> impl Stream<Item = std::io::Result<Bytes>
     )
 }
 
-fn main() -> std::io::Result<()> {
+fn main() -> Result<()> {
     let tokio_runtime = tokio::runtime::Runtime::new()?;
     tokio_runtime.block_on(amain())?;
 
     Ok(())
 }
 
-async fn amain() -> std::io::Result<()> {
-    let stream = get_stream(10, 100);
-    let tmp = File::from_std(tempfile()?);
-    //let stream = tokio_util::io::ReaderStream::new(tmp);
-    let stream = BufferedStream::new(tmp, stream).await?;
-    put(stream);
-
-    Ok(())
+async fn amain() -> Result<()> {
+    let stream = buffered_tempfile_stream(get_stream(10, 101)).await?;
+    put(stream).await
 }
 
-pub fn put<'a, S>(_stream: S)
+pub async fn put<'a, S>(stream: S) -> Result<()>
 where
     // This uses the same signature as resoto-s3's API.
-    S: Stream<Item = Result<Bytes, std::io::Error>> + Send + 'static,
+    S: Stream<Item = Result<Bytes>> + Send + 'static,
 {
-    println!("TODO");
+    let mut file = File::create("/tmp/foo.txt").await?;
+    let mut read = StreamReader::new(Box::pin(stream));
+    tokio::io::copy(&mut read, &mut file).await?;
+    Ok(())
 }

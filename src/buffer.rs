@@ -4,8 +4,22 @@ use std::io::Result;
 use std::io::SeekFrom;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use tempfile::tempfile;
+use tokio::fs::File;
 use tokio::io::{copy, AsyncRead, AsyncSeek, AsyncSeekExt, AsyncWrite};
 use tokio_util::io::{ReaderStream, StreamReader};
+
+/// Returns a BufferedStream backend by a temporary file.
+///
+/// The temporary file will be deleted when the result stream
+/// is dropped.
+pub async fn buffered_tempfile_stream<S>(bytes: S) -> Result<BufferedStream<File>>
+where
+    S: Stream<Item = Result<Bytes>> + Send + Sync,
+{
+    let tmp = File::from_std(tempfile()?);
+    BufferedStream::new(tmp, bytes).await
+}
 
 // A stream fully buffered by a backing file.
 pub struct BufferedStream<R>
@@ -29,8 +43,7 @@ where
     where
         S: Stream<Item = Result<Bytes>> + Send + Sync,
     {
-        let bytes = Box::pin(bytes);
-        let mut read = StreamReader::new(bytes);
+        let mut read = StreamReader::new(Box::pin(bytes));
         copy(&mut read, &mut file).await?;
 
         let size = file.seek(SeekFrom::End(0)).await? as usize;
@@ -68,8 +81,6 @@ mod tests {
     use bytes::BytesMut;
     use futures::stream;
     use futures_test::stream::StreamTestExt;
-    use tempfile::tempfile;
-    use tokio::fs::File;
 
     #[tokio::test]
     async fn test_buffered_stream() -> Result<()> {
@@ -79,6 +90,25 @@ mod tests {
 
         let mut file = File::from_std(tempfile()?);
         let buf_stream = BufferedStream::new(&mut file, stream).await?;
+        assert_eq!(buf_stream.size(), 9);
+        assert_eq!(buf_stream.size_hint(), (9, Some(9)));
+
+        let mut all = BytesMut::new();
+        for i in buf_stream.collect::<Vec<_>>().await {
+            all.extend_from_slice(&i?);
+        }
+
+        assert_eq!(all, "foobarbaz");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_buffered_tempfile_stream() -> Result<()> {
+        let stream = stream::iter(vec!["foo", "bar", "baz"])
+            .map(|i| Ok(Bytes::from(i)))
+            .interleave_pending();
+
+        let buf_stream = buffered_tempfile_stream(stream).await?;
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 

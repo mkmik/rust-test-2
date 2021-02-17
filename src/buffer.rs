@@ -27,8 +27,9 @@ where
     /// The granularity of stream "chunks" will not be preserved.
     pub async fn new<S>(mut file: R, bytes: S) -> Result<BufferedStream<R>>
     where
-        S: Stream<Item = Result<Bytes>> + Send + Sync + Unpin,
+        S: Stream<Item = Result<Bytes>> + Send + Sync,
     {
+        let bytes = Box::pin(bytes);
         let mut read = StreamReader::new(bytes);
         copy(&mut read, &mut file).await?;
 
@@ -57,7 +58,7 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.size, Some(self.size))
+        (self.size, Some(self.size()))
     }
 }
 

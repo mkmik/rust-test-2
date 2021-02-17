@@ -48,7 +48,7 @@ where
     /// buffered file.
     ///
     /// The granularity of stream "chunks" will not be preserved.
-    pub async fn new<S>(mut file: R, bytes: S) -> Result<BufferedStream<R>>
+    pub async fn new<S>(mut file: R, bytes: S) -> Result<Self>
     where
         S: Stream<Item = Result<Bytes>> + Send + Sync,
     {

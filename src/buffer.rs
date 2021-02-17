@@ -4,28 +4,33 @@ use std::io::Result;
 use std::io::SeekFrom;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::fs::File;
-use tokio::io::{copy, AsyncSeekExt};
+use tokio::io::{copy, AsyncRead, AsyncSeek, AsyncSeekExt, AsyncWrite};
 use tokio_util::io::{ReaderStream, StreamReader};
 
 // A stream fully buffered by a backing file.
-pub struct BufferedStream<'a> {
+pub struct BufferedStream<R>
+where
+    R: AsyncRead + AsyncWrite + AsyncSeek + Unpin,
+{
     size: usize,
-    inner: ReaderStream<&'a mut File>,
+    inner: ReaderStream<R>,
 }
 
-impl<'a> BufferedStream<'a> {
+impl<R> BufferedStream<R>
+where
+    R: AsyncRead + AsyncWrite + AsyncSeek + Unpin,
+{
     /// Consumes the bytes stream fully and writes its content into file.
     /// It returns a Stream implementation that reads the same content from the
     /// buffered file.
     ///
     /// The granularity of stream "chunks" will not be preserved.
-    pub async fn new<S>(file: &'a mut File, bytes: S) -> Result<BufferedStream<'a>>
+    pub async fn new<S>(mut file: R, bytes: S) -> Result<BufferedStream<R>>
     where
-        S: Stream<Item = Result<Bytes>> + Send + Sync + Unpin + 'a,
+        S: Stream<Item = Result<Bytes>> + Send + Sync + Unpin,
     {
         let mut read = StreamReader::new(bytes);
-        copy(&mut read, file).await?;
+        copy(&mut read, &mut file).await?;
 
         let size = file.seek(SeekFrom::End(0)).await? as usize;
         file.seek(SeekFrom::Start(0)).await?;
@@ -41,7 +46,10 @@ impl<'a> BufferedStream<'a> {
     }
 }
 
-impl<'a> Stream for BufferedStream<'a> {
+impl<R> Stream for BufferedStream<R>
+where
+    R: AsyncRead + AsyncWrite + AsyncSeek + Unpin,
+{
     type Item = Result<Bytes>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -60,6 +68,7 @@ mod tests {
     use futures::stream;
     use futures_test::stream::StreamTestExt;
     use tempfile::tempfile;
+    use tokio::fs::File;
 
     #[tokio::test]
     async fn test_buffered_stream() -> Result<()> {

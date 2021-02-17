@@ -1,7 +1,6 @@
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
-use std::io::Result;
-use std::io::SeekFrom;
+use std::io::{Result, SeekFrom, Cursor};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tempfile::tempfile;
@@ -21,7 +20,15 @@ where
     BufferedStream::new(tmp, bytes).await
 }
 
-// A stream fully buffered by a backing file.
+/// Returns a BufferedStream backend by a in-memory buffer.
+pub async fn memory_buffered_stream<S>(bytes: S) -> Result<BufferedStream<Cursor<Vec<u8>>>>
+where
+    S: Stream<Item = Result<Bytes>> + Send + Sync,
+{
+    BufferedStream::new(Cursor::new(Vec::new()), bytes).await
+}
+
+// A stream fully buffered by a backing store..
 pub struct BufferedStream<R>
 where
     R: AsyncRead + AsyncWrite + AsyncSeek + Unpin,
@@ -88,8 +95,8 @@ mod tests {
             .map(|i| Ok(Bytes::from(i)))
             .interleave_pending();
 
-        let mut file = File::from_std(tempfile()?);
-        let buf_stream = BufferedStream::new(&mut file, stream).await?;
+        let buffer = std::io::Cursor::new(Vec::new()); // in-memory buffer
+        let buf_stream = BufferedStream::new(buffer, stream).await?;
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 
@@ -109,6 +116,25 @@ mod tests {
             .interleave_pending();
 
         let buf_stream = buffered_tempfile_stream(stream).await?;
+        assert_eq!(buf_stream.size(), 9);
+        assert_eq!(buf_stream.size_hint(), (9, Some(9)));
+
+        let mut all = BytesMut::new();
+        for i in buf_stream.collect::<Vec<_>>().await {
+            all.extend_from_slice(&i?);
+        }
+
+        assert_eq!(all, "foobarbaz");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_memory_buffered_stream() -> Result<()> {
+        let stream = stream::iter(vec!["foo", "bar", "baz"])
+            .map(|i| Ok(Bytes::from(i)))
+            .interleave_pending();
+
+        let buf_stream = memory_buffered_stream(stream).await?;
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 

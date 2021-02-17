@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 use bytes::Bytes;
 use futures::{future, Stream, StreamExt};
-use ru2::buffer::buffered_tempfile_stream;
+use ru2::buffer::tempfile_buffered_stream;
 use std::io::Result;
 use std::io::SeekFrom;
 use std::time::Duration;
@@ -33,7 +33,7 @@ fn main() -> Result<()> {
 }
 
 async fn amain() -> Result<()> {
-    let stream = buffered_tempfile_stream(get_stream(10, 101)).await?;
+    let stream = tempfile_buffered_stream(get_stream(10, 101)).await?;
     put(stream).await
 }
 

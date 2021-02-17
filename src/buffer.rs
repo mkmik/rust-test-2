@@ -12,7 +12,7 @@ use tokio_util::io::{ReaderStream, StreamReader};
 ///
 /// The temporary file will be deleted when the result stream
 /// is dropped.
-pub async fn buffered_tempfile_stream<S>(bytes: S) -> Result<BufferedStream<File>>
+pub async fn tempfile_buffered_stream<S>(bytes: S) -> Result<BufferedStream<File>>
 where
     S: Stream<Item = Result<Bytes>> + Send + Sync,
 {
@@ -110,12 +110,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_buffered_tempfile_stream() -> Result<()> {
+    async fn test_tempfile_buffered_stream() -> Result<()> {
         let stream = stream::iter(vec!["foo", "bar", "baz"])
             .map(|i| Ok(Bytes::from(i)))
             .interleave_pending();
 
-        let buf_stream = buffered_tempfile_stream(stream).await?;
+        let buf_stream = tempfile_buffered_stream(stream).await?;
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 

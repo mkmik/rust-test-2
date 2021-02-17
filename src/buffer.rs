@@ -12,6 +12,7 @@ use tokio_util::io::{ReaderStream, StreamReader};
 ///
 /// The temporary file will be deleted when the result stream
 /// is dropped.
+#[allow(dead_code)]
 pub async fn tempfile_buffered_stream<S>(bytes: S) -> Result<BufferedStream<File>>
 where
     S: Stream<Item = Result<Bytes>> + Send + Sync,
@@ -21,6 +22,7 @@ where
 }
 
 /// Returns a BufferedStream backend by a in-memory buffer.
+#[allow(dead_code)]
 pub async fn memory_buffered_stream<S>(bytes: S) -> Result<BufferedStream<Cursor<Vec<u8>>>>
 where
     S: Stream<Item = Result<Bytes>> + Send + Sync,

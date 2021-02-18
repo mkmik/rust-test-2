@@ -87,7 +87,7 @@ where
 mod tests {
     use super::*;
     use bytes::BytesMut;
-    use futures::stream;
+    use futures::stream::{self, TryStreamExt};
     use futures_test::stream::StreamTestExt;
 
     #[tokio::test]
@@ -101,12 +101,12 @@ mod tests {
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 
-        let mut all = BytesMut::new();
-        for i in buf_stream.collect::<Vec<_>>().await {
-            all.extend_from_slice(&i?);
-        }
+        let content = buf_stream
+            .map_ok(|b| bytes::BytesMut::from(&b[..]))
+            .try_concat()
+            .await?;
 
-        assert_eq!(all, "foobarbaz");
+        assert_eq!(content, "foobarbaz");
         Ok(())
     }
 
@@ -120,12 +120,12 @@ mod tests {
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 
-        let mut all = BytesMut::new();
-        for i in buf_stream.collect::<Vec<_>>().await {
-            all.extend_from_slice(&i?);
-        }
+        let content = buf_stream
+            .map_ok(|b| bytes::BytesMut::from(&b[..]))
+            .try_concat()
+            .await?;
 
-        assert_eq!(all, "foobarbaz");
+        assert_eq!(content, "foobarbaz");
         Ok(())
     }
 
@@ -139,12 +139,12 @@ mod tests {
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 
-        let mut all = BytesMut::new();
-        for i in buf_stream.collect::<Vec<_>>().await {
-            all.extend_from_slice(&i?);
-        }
+        let content = buf_stream
+            .map_ok(|b| bytes::BytesMut::from(&b[..]))
+            .try_concat()
+            .await?;
 
-        assert_eq!(all, "foobarbaz");
+        assert_eq!(content, "foobarbaz");
         Ok(())
     }
 }

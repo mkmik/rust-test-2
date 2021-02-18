@@ -1,7 +1,8 @@
 //+ This module contains a Stream wrapper that fully consumes (slurps) a Stream
-//+ so it can compute its size, while saving it to a backing store for later replay.
+//+ so it can compute its size, while saving it to a backing store for later
+//+ replay.
 use bytes::Bytes;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, pin_mut};
 use std::io::{Cursor, Result, SeekFrom};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -53,7 +54,8 @@ where
     where
         S: Stream<Item = Result<Bytes>> + Send + Sync,
     {
-        let mut read = StreamReader::new(Box::pin(bytes));
+        pin_mut!(bytes);
+        let mut read = StreamReader::new(bytes);
         let size = copy(&mut read, &mut backing_store).await? as usize;
         backing_store.seek(SeekFrom::Start(0)).await?;
 

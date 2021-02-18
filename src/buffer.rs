@@ -86,18 +86,19 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use futures::stream::{self, TryStreamExt};
     use futures_test::stream::StreamTestExt;
 
-    #[tokio::test]
-    async fn test_buffered_stream() -> Result<()> {
-        let stream = stream::iter(vec!["foo", "bar", "baz"])
+    fn test_data() -> impl Stream<Item = Result<Bytes>> + Send + Sync {
+        stream::iter(vec!["foo", "bar", "baz"])
             .map(|i| Ok(Bytes::from(i)))
-            .interleave_pending();
+            .interleave_pending()
+    }
 
-        let buffer = std::io::Cursor::new(Vec::new()); // in-memory buffer
-        let buf_stream = BufferedStream::new(buffer, stream).await?;
+    async fn check_stream<R>(buf_stream: BufferedStream<R>) -> Result<()>
+    where
+        R: AsyncRead + AsyncWrite + AsyncSeek + Unpin,
+    {
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 
@@ -108,43 +109,21 @@ mod tests {
 
         assert_eq!(content, "foobarbaz");
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_buffered_stream() -> Result<()> {
+        let backing_store = std::io::Cursor::new(Vec::new()); // in-memory buffer
+        check_stream(BufferedStream::new(backing_store, test_data()).await?).await
     }
 
     #[tokio::test]
     async fn test_slurp_stream_tempfile() -> Result<()> {
-        let stream = stream::iter(vec!["foo", "bar", "baz"])
-            .map(|i| Ok(Bytes::from(i)))
-            .interleave_pending();
-
-        let buf_stream = slurp_stream_tempfile(stream).await?;
-        assert_eq!(buf_stream.size(), 9);
-        assert_eq!(buf_stream.size_hint(), (9, Some(9)));
-
-        let content = buf_stream
-            .map_ok(|b| bytes::BytesMut::from(&b[..]))
-            .try_concat()
-            .await?;
-
-        assert_eq!(content, "foobarbaz");
-        Ok(())
+        check_stream(slurp_stream_tempfile(test_data()).await?).await
     }
 
     #[tokio::test]
     async fn test_slurp_stream_memory() -> Result<()> {
-        let stream = stream::iter(vec!["foo", "bar", "baz"])
-            .map(|i| Ok(Bytes::from(i)))
-            .interleave_pending();
-
-        let buf_stream = slurp_stream_memory(stream).await?;
-        assert_eq!(buf_stream.size(), 9);
-        assert_eq!(buf_stream.size_hint(), (9, Some(9)));
-
-        let content = buf_stream
-            .map_ok(|b| bytes::BytesMut::from(&b[..]))
-            .try_concat()
-            .await?;
-
-        assert_eq!(content, "foobarbaz");
-        Ok(())
+        check_stream(slurp_stream_memory(test_data()).await?).await
     }
 }

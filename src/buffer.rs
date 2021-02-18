@@ -13,7 +13,7 @@ use tokio_util::io::{ReaderStream, StreamReader};
 /// The temporary file will be deleted when the result stream
 /// is dropped.
 #[allow(dead_code)]
-pub async fn tempfile_buffered_stream<S>(bytes: S) -> Result<BufferedStream<File>>
+pub async fn slurp_stream_tempfile<S>(bytes: S) -> Result<BufferedStream<File>>
 where
     S: Stream<Item = Result<Bytes>> + Send + Sync,
 {
@@ -23,7 +23,7 @@ where
 
 /// Returns a BufferedStream backend by a in-memory buffer.
 #[allow(dead_code)]
-pub async fn memory_buffered_stream<S>(bytes: S) -> Result<BufferedStream<Cursor<Vec<u8>>>>
+pub async fn slurp_stream_memory<S>(bytes: S) -> Result<BufferedStream<Cursor<Vec<u8>>>>
 where
     S: Stream<Item = Result<Bytes>> + Send + Sync,
 {
@@ -112,12 +112,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_tempfile_buffered_stream() -> Result<()> {
+    async fn test_slurp_stream_tempfile() -> Result<()> {
         let stream = stream::iter(vec!["foo", "bar", "baz"])
             .map(|i| Ok(Bytes::from(i)))
             .interleave_pending();
 
-        let buf_stream = tempfile_buffered_stream(stream).await?;
+        let buf_stream = slurp_stream_tempfile(stream).await?;
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 
@@ -131,12 +131,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_memory_buffered_stream() -> Result<()> {
+    async fn test_slurp_stream_memory() -> Result<()> {
         let stream = stream::iter(vec!["foo", "bar", "baz"])
             .map(|i| Ok(Bytes::from(i)))
             .interleave_pending();
 
-        let buf_stream = memory_buffered_stream(stream).await?;
+        let buf_stream = slurp_stream_memory(stream).await?;
         assert_eq!(buf_stream.size(), 9);
         assert_eq!(buf_stream.size_hint(), (9, Some(9)));
 

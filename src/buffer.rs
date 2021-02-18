@@ -2,7 +2,7 @@
 //+ so it can compute its size, while saving it to a backing store for later
 //+ replay.
 use bytes::Bytes;
-use futures::{Stream, StreamExt, pin_mut};
+use futures::{pin_mut, Stream, StreamExt};
 use std::io::{Cursor, Result, SeekFrom};
 use std::pin::Pin;
 use std::task::{Context, Poll};

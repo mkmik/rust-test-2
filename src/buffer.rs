@@ -1,9 +1,10 @@
+//+ This module contains a Stream wrapper that fully consumes (slurps) a Stream
+//+ so it can compute its size, while saving it to a backing store for later replay.
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
 use std::io::{Cursor, Result, SeekFrom};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tempfile::tempfile;
 use tokio::fs::File;
 use tokio::io::{copy, AsyncRead, AsyncSeek, AsyncSeekExt, AsyncWrite};
 use tokio_util::io::{ReaderStream, StreamReader};
@@ -17,7 +18,7 @@ pub async fn slurp_stream_tempfile<S>(bytes: S) -> Result<BufferedStream<File>>
 where
     S: Stream<Item = Result<Bytes>> + Send + Sync,
 {
-    let tmp = File::from_std(tempfile()?);
+    let tmp = File::from_std(tempfile::tempfile()?);
     BufferedStream::new(tmp, bytes).await
 }
 
@@ -48,19 +49,17 @@ where
     /// buffered file.
     ///
     /// The granularity of stream "chunks" will not be preserved.
-    pub async fn new<S>(mut file: R, bytes: S) -> Result<Self>
+    pub async fn new<S>(mut backing_store: R, bytes: S) -> Result<Self>
     where
         S: Stream<Item = Result<Bytes>> + Send + Sync,
     {
         let mut read = StreamReader::new(Box::pin(bytes));
-        copy(&mut read, &mut file).await?;
-
-        let size = file.seek(SeekFrom::End(0)).await? as usize;
-        file.seek(SeekFrom::Start(0)).await?;
+        let size = copy(&mut read, &mut backing_store).await? as usize;
+        backing_store.seek(SeekFrom::Start(0)).await?;
 
         Ok(Self {
             size,
-            inner: ReaderStream::new(file),
+            inner: ReaderStream::new(backing_store),
         })
     }
 
